@@ -1,0 +1,98 @@
+ /************
+    * ACTIVITY PAGE / SHORTCODE
+    * Show nominations for members - who is going list
+    *************/
+    add_shortcode('display_activity_attendees', 'wt_display_activity_attendees');
+
+    function wt_display_activity_attendees($atts) {
+        global $post;
+
+        // Check if the user is an active member
+        if( !is_user_logged_in() && !rcp_user_has_active_membership() ) {
+            return ''; // Exit if not authorised
+        }
+
+        // Retrieve Activity Nominations related to this activity
+        $args = array(
+            'post_type'      => 'activity-nomination',
+            'posts_per_page' => -1,
+            'orderby'        => 'meta_value',
+            'order'          => 'ASC', 
+            'meta_key'       => 'nomination_status',
+            'meta_query'     => array(
+                'relation' => 'AND', 
+                array(
+                    'key'     => 'nomination_activity_id', // Nominations for the current activity
+                    'value'   => $post->ID,
+                    'compare' => '=',
+                ),
+                array(
+                    'key'     => 'nomination_status',
+                    'value'   => 'approved', //Only approved nominations
+                    'compare' => '=',
+                ),
+            ),
+        );
+
+        // Initialize the Output
+        $output = '<h2 class="elementor-heading-title elementor-size-default">Approved Attendees</h2>';
+        $output .= '<div class="elementor-text-editor elementor-clearfix">';
+        $output .= '<table class="elementor-table">';
+        $output .= '<thead>';
+        $output .= '<tr>';
+        $output .= '<th>Date</th>';
+        $output .= '<th>Name</th>';
+        $output .= '<th>Status</th>';
+        $output .= '</tr>';
+        $output .= '</thead>';
+        $output .= '<tbody>';
+        $output .= do_shortcode( '[notice_activity_is_full]' );
+        
+        $query = new WP_Query($args);
+
+        // Loop through Activity Nominations
+        if($query->have_posts()) {
+            while($query->have_posts()) {
+                $query->the_post();
+
+                // Fetch data to display. 
+                $date = get_the_date();
+                $user_id = get_post_meta(get_the_ID(), 'nomination_user', true);
+                $status = get_post_meta(get_the_ID(), 'nomination_status', true);
+                $activityID = get_post_meta(get_the_ID(), 'nomination_activity_id', true);
+                //Fetch the gravity forms entry id from the nomination
+                $entry_id = get_post_meta(get_the_ID(), 'gravity_forms_entry_id', true);
+                $form_id = 1; //Event Nomination Form
+
+                // Fetch the nominated user's first and last name using the user ID
+                $full_name = wt_fetch_full_name_by_user_id($user_id);
+
+
+                // Generate the Gravity Flow frontend status URL for this entry
+                $gravity_flow_frontend_url = home_url("members/inbox/?page=gravityflow-inbox&view=entry&id={$form_id}&lid={$entry_id}&activity_id={$activityID}");
+
+                // Append to output
+                $output .= '<tr>';
+                $output .= "<td>{$date}</td>";
+                $output .= "<td>{$full_name}</td>";
+                $output .= "<td>{$status}</td>";
+                $output .= '</tr>';
+            }
+        } else {
+            $output .= '<tr>';
+            $output .= '<td colspan="4">No attendees found.</td>'; 
+            $output .= '</tr>';
+        }
+
+        // Close table and div
+        $output .= '</tbody>';
+        $output .= '</table>';
+        $output .= '</div>';
+
+        // Reset query
+        wp_reset_postdata();
+
+        $output .= '</ul>';
+        
+        return $output;
+    }
